@@ -12,7 +12,6 @@ import {
   closestCenter,
   DragOverlay,
 } from "@dnd-kit/core";
-import { arrayMove } from "@dnd-kit/sortable";
 import { api } from "@/lib/api";
 import type { Project, Task, TaskStatus } from "@/types";
 import KanbanColumn from "@/components/KanbanColumn";
