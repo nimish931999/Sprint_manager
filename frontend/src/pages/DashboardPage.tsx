@@ -12,7 +12,7 @@ export default function DashboardPage() {
     queryFn: () => api.get("/dashboard/").then((r) => r.data),
   });
 
-  if (isLoading) {
+  if (isLoading || !data) {
     return (
       <div className="p-8">
         <div className="animate-pulse space-y-4">
@@ -60,8 +60,8 @@ export default function DashboardPage() {
           <h2 className="font-medium mb-4">Tasks by Priority</h2>
           <div className="space-y-3">
             {(["high", "medium", "low"] as const).map((p) => {
-              const count = data?.by_priority[p] ?? 0;
-              const total = data?.total_tasks ?? 1;
+              const count = data.by_priority[p] ?? 0;
+              const total = data.total_tasks || 1;
               const pct = total > 0 ? Math.round((count / total) * 100) : 0;
               const colors = { high: "bg-red-500", medium: "bg-yellow-500", low: "bg-green-500" };
               return (
@@ -82,11 +82,11 @@ export default function DashboardPage() {
         {/* By Project */}
         <div className="bg-card border rounded-lg p-5">
           <h2 className="font-medium mb-4">Projects</h2>
-          {data?.by_project.length === 0 ? (
+          {data.by_project.length === 0 ? (
             <p className="text-sm text-muted-foreground">No projects yet</p>
           ) : (
             <div className="space-y-3">
-              {data?.by_project.map((p) => {
+              {data.by_project.map((p) => {
                 const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
                 return (
                   <div key={p.id}>
