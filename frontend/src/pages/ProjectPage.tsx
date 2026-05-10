@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -25,12 +25,23 @@ const COLUMNS: { id: TaskStatus; label: string; badgeClass: string }[] = [
   { id: "done", label: "Done", badgeClass: "bg-green-50 text-green-700" },
 ];
 
+const COLUMN_IDS = new Set<string>(COLUMNS.map((c) => c.id));
+
+function resolveColumn(itemId: string, taskList: Task[]): TaskStatus | null {
+  if (COLUMN_IDS.has(itemId)) return itemId as TaskStatus;
+  return taskList.find((t) => t.id === itemId)?.status ?? null;
+}
+
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const [selectedTask, setSelectedTask] = useState<Task | null | "new">(null);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [overColumn, setOverColumn] = useState<TaskStatus | null>(null);
+
+  // Refs to track drag state without stale closures
+  const dragOriginalStatus = useRef<TaskStatus | null>(null);
+  const dragTargetStatus = useRef<TaskStatus | null>(null);
 
   const { data: project } = useQuery<Project>({
     queryKey: ["project", id],
@@ -45,16 +56,9 @@ export default function ProjectPage() {
   const updateStatusMutation = useMutation({
     mutationFn: ({ taskId, status }: { taskId: string; status: string }) =>
       api.patch(`/projects/${id}/tasks/${taskId}`, { status }).then((r) => r.data),
-    onMutate: async ({ taskId, status }) => {
-      await qc.cancelQueries({ queryKey: ["tasks", id] });
-      const prev = qc.getQueryData<Task[]>(["tasks", id]);
-      qc.setQueryData<Task[]>(["tasks", id], (old) =>
-        old?.map((t) => (t.id === taskId ? { ...t, status: status as TaskStatus } : t)) ?? []
-      );
-      return { prev };
-    },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.prev) qc.setQueryData(["tasks", id], ctx.prev);
+    onError: () => {
+      // Revert on failure
+      qc.invalidateQueries({ queryKey: ["tasks", id] });
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["tasks", id] });
@@ -66,64 +70,63 @@ export default function ProjectPage() {
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
 
-  function getColumnForItem(itemId: string): TaskStatus | null {
-    // Check if it's a column id directly
-    if (COLUMNS.find((c) => c.id === itemId)) return itemId as TaskStatus;
-    // Otherwise find the task's column
-    return tasks.find((t) => t.id === itemId)?.status ?? null;
-  }
-
   function handleDragStart({ active }: DragStartEvent) {
-    setActiveTask(tasks.find((t) => t.id === active.id) ?? null);
+    const task = tasks.find((t) => t.id === active.id) ?? null;
+    setActiveTask(task);
+    // Capture original status at drag start — this never changes during the drag
+    dragOriginalStatus.current = task?.status ?? null;
+    dragTargetStatus.current = task?.status ?? null;
   }
 
   function handleDragOver({ active, over }: DragOverEvent) {
-    if (!over) { setOverColumn(null); return; }
-    const col = getColumnForItem(over.id as string);
-    setOverColumn(col);
-
-    // Live reorder: move task to new column while dragging
-    const activeId = active.id as string;
-    const overId = over.id as string;
-    const activeStatus = tasks.find((t) => t.id === activeId)?.status;
-    const overStatus = getColumnForItem(overId);
-
-    if (!activeStatus || !overStatus || activeStatus === overStatus) return;
-
-    // Optimistically update the column in cache
-    qc.setQueryData<Task[]>(["tasks", id], (old) =>
-      old?.map((t) => (t.id === activeId ? { ...t, status: overStatus } : t)) ?? []
-    );
-  }
-
-  function handleDragEnd({ active, over }: DragEndEvent) {
-    setActiveTask(null);
-    setOverColumn(null);
-
     if (!over) {
-      // Cancelled — revert optimistic update
-      qc.invalidateQueries({ queryKey: ["tasks", id] });
+      setOverColumn(null);
       return;
     }
 
     const activeId = active.id as string;
-    const overId = over.id as string;
-    const newStatus = getColumnForItem(overId);
+    // Resolve target column from the ORIGINAL tasks list (not cache)
+    const targetCol = resolveColumn(over.id as string, tasks);
+    if (!targetCol) return;
 
-    // Get the original status from the server data (tasks, not cache)
-    const originalStatus = tasks.find((t) => t.id === activeId)?.status;
+    dragTargetStatus.current = targetCol;
+    setOverColumn(targetCol);
 
-    if (!newStatus || !originalStatus) return;
+    // Optimistically move card visually
+    if (targetCol !== dragOriginalStatus.current) {
+      qc.setQueryData<Task[]>(["tasks", id], (old) =>
+        old?.map((t) => (t.id === activeId ? { ...t, status: targetCol } : t)) ?? []
+      );
+    }
+  }
 
-    if (newStatus !== originalStatus) {
-      updateStatusMutation.mutate({ taskId: activeId, status: newStatus });
+  function handleDragEnd({ active }: DragEndEvent) {
+    setActiveTask(null);
+    setOverColumn(null);
+
+    const activeId = active.id as string;
+    const original = dragOriginalStatus.current;
+    const target = dragTargetStatus.current;
+
+    dragOriginalStatus.current = null;
+    dragTargetStatus.current = null;
+
+    if (!original || !target) return;
+
+    if (target !== original) {
+      // Fire API — optimistic update already applied in handleDragOver
+      updateStatusMutation.mutate({ taskId: activeId, status: target });
+    } else {
+      // Dropped back in same column — revert any visual changes
+      qc.invalidateQueries({ queryKey: ["tasks", id] });
     }
   }
 
   function handleDragCancel() {
     setActiveTask(null);
     setOverColumn(null);
-    // Revert optimistic update
+    dragOriginalStatus.current = null;
+    dragTargetStatus.current = null;
     qc.invalidateQueries({ queryKey: ["tasks", id] });
   }
 
@@ -132,7 +135,6 @@ export default function ProjectPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <div className="px-8 py-5 border-b flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link to="/projects" className="text-muted-foreground hover:text-foreground transition-colors">
@@ -154,7 +156,6 @@ export default function ProjectPage() {
         </button>
       </div>
 
-      {/* Board */}
       <div className="flex-1 overflow-auto p-6">
         {isLoading ? (
           <div className="flex gap-4">
