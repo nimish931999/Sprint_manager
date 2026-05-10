@@ -5,8 +5,10 @@ from app.models.task import Task
 from app.models.user import User
 from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectOut
 from app.api.deps import get_current_user
+from app.core.logging import get_logger
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+logger = get_logger(__name__)
 
 
 def to_oid(id_str: str) -> PydanticObjectId:
@@ -33,6 +35,7 @@ async def list_projects(current_user: User = Depends(get_current_user)):
 async def create_project(payload: ProjectCreate, current_user: User = Depends(get_current_user)):
     project = Project(**payload.model_dump(), owner_id=str(current_user.id))
     await project.insert()
+    logger.info("Project created: '%s' by user %s", project.name, current_user.id)
     return await _to_out(project)
 
 

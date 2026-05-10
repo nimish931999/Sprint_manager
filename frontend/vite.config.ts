@@ -11,7 +11,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/api": "http://localhost:8000",
+      "/api": "https://sprint-manager-r3c3-git-master-nkappal-gmailcoms-projects.vercel.app",
     },
   },
 });
