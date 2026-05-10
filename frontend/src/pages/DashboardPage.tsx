@@ -10,6 +10,8 @@ export default function DashboardPage() {
   const { data, isLoading } = useQuery<Dashboard>({
     queryKey: ["dashboard"],
     queryFn: () => api.get("/dashboard/").then((r) => r.data),
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   if (isLoading || !data) {
