@@ -5,6 +5,10 @@
       "dest": "https://sprint-manager-backend-iota.vercel.app/api/$1"
     },
     {
+      "src": "/assets/(.*)",
+      "dest": "/assets/$1"
+    },
+    {
       "src": "/(.*)",
       "dest": "/index.html"
     }
