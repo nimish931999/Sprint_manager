@@ -24,7 +24,9 @@ async def get_dashboard(current_user: User = Depends(get_current_user)):
     if not projects:
         return DashboardOut(
             total_tasks=0, completed_tasks=0, pending_tasks=0,
-            in_progress_tasks=0, by_priority={}, by_project=[]
+            in_progress_tasks=0,
+            by_priority={"low": 0, "medium": 0, "high": 0},
+            by_project=[]
         )
 
     project_ids = [str(p.id) for p in projects]

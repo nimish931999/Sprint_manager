@@ -60,7 +60,7 @@ export default function DashboardPage() {
           <h2 className="font-medium mb-4">Tasks by Priority</h2>
           <div className="space-y-3">
             {(["high", "medium", "low"] as const).map((p) => {
-              const count = data.by_priority[p] ?? 0;
+              const count = (data.by_priority ?? {})[p] ?? 0;
               const total = data.total_tasks || 1;
               const pct = total > 0 ? Math.round((count / total) * 100) : 0;
               const colors = { high: "bg-red-500", medium: "bg-yellow-500", low: "bg-green-500" };
