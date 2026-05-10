@@ -1,12 +1,12 @@
 {
-  "rewrites": [
+  "routes": [
     {
-      "source": "/api/:path*",
-      "destination": "https://sprint-manager-backend-iota.vercel.app/api/:path*"
+      "src": "/api/(.*)",
+      "dest": "https://sprint-manager-backend-iota.vercel.app/api/$1"
     },
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }
