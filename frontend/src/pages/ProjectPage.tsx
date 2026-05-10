@@ -100,19 +100,21 @@ export default function ProjectPage() {
     setActiveTask(null);
     setOverColumn(null);
 
-    if (!over) return;
+    if (!over) {
+      // Cancelled — revert optimistic update
+      qc.invalidateQueries({ queryKey: ["tasks", id] });
+      return;
+    }
 
     const activeId = active.id as string;
     const overId = over.id as string;
-    const currentTasks = qc.getQueryData<Task[]>(["tasks", id]) ?? [];
-    const activeTask = currentTasks.find((t) => t.id === activeId);
     const newStatus = getColumnForItem(overId);
 
-    if (!activeTask || !newStatus) return;
+    // Get the original status from the server data (tasks, not cache)
+    const originalStatus = tasks.find((t) => t.id === activeId)?.status;
 
-    // Persist if status changed from original
-    const originalTasks = tasks;
-    const originalStatus = originalTasks.find((t) => t.id === activeId)?.status;
+    if (!newStatus || !originalStatus) return;
+
     if (newStatus !== originalStatus) {
       updateStatusMutation.mutate({ taskId: activeId, status: newStatus });
     }
